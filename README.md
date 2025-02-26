@@ -14,4 +14,4 @@ This repository contains two scripts:
 
     The script cannot understand the proprietary .spm file format, so the user must export the capture to a CSV file by right clicking and selecting Export to...
 
-The conversion process synthesizes Ethernet frames for each serial read and write operation. The Ethernet frame uses 00:00:00:00:00 as the MAC address of the host and the device MAC address is based on the serial port number. The EtherType is set to the bogus value 0x4141.
+    The conversion process synthesizes UDP packets for each serial read and write operation. The host takes the IP address 1.0.0.0.
