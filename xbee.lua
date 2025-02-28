@@ -22,7 +22,23 @@ local command_names = {
     [0xA1] = "Route Record Indicator",
     [0xA3] = "Many-to-One Route Request Indicator"
 }
-proto.fields.cmdid  = ProtoField.uint8("xbee.cmdid", "Command ID", base.HEX, command_names)
+proto.fields.cmdid                    = ProtoField.uint8("xbee.cmdid", "Command ID", base.HEX, command_names)
+
+-- Fields for Zigbee Transmit Request (0x10)
+proto.fields["0x10.frame_id"]         = ProtoField.uint8("xbee.0x10.frame_id", "Frame ID", base.HEX)
+proto.fields["0x10.dest_addr64"]      = ProtoField.uint64("xbee.0x10.dest_addr64", "64-bit Destination Address", base
+    .HEX)
+proto.fields["0x10.dest_addr16"]      = ProtoField.uint16("xbee.0x10.dest_addr16", "16-bit Destination Address", base
+    .HEX)
+proto.fields["0x10.broadcast_radius"] = ProtoField.uint8("xbee.0x10.broadcast_radius", "Broadcast Radius", base.DEC)
+proto.fields["0x10.tx_options"]       = ProtoField.uint8("xbee.0x10.tx_options", "Transmit Options", base.HEX)
+proto.fields["0x10.rf_data"]          = ProtoField.bytes("xbee.0x10.rf_data", "RF Data")
+
+-- Fields for Zigbee Receive Packet (0x90)
+proto.fields["0x90.src_addr64"]       = ProtoField.uint64("xbee.0x90.src_addr64", "64-bit Source Address", base.HEX)
+proto.fields["0x90.src_addr16"]       = ProtoField.uint16("xbee.0x90.src_addr16", "16-bit Source Address", base.HEX)
+proto.fields["0x90.rx_options"]       = ProtoField.uint8("xbee.0x90.rx_options", "Receive Options", base.HEX)
+proto.fields["0x90.rf_data"]          = ProtoField.bytes("xbee.0x90.rf_data", "RF Data")
 
 
 -- In the AP=2 mode, the wire format includes escape characters. This function
@@ -64,6 +80,29 @@ local function validate_checksum(buf)
 end
 
 
+-- Parse Zigbee Transmit Request (0x10)
+local function parse_tx_request(tvb, tree)
+    tree:add(proto.fields["0x10.frame_id"], tvb:range(0, 1))
+    tree:add(proto.fields["0x10.dest_addr64"], tvb:range(1, 8))
+    tree:add(proto.fields["0x10.dest_addr16"], tvb:range(9, 2))
+    tree:add(proto.fields["0x10.broadcast_radius"], tvb:range(11, 1))
+    tree:add(proto.fields["0x10.tx_options"], tvb:range(12, 1))
+    if tvb:len() > 13 then
+        tree:add(proto.fields["0x10.rf_data"], tvb:range(13, tvb:len() - 13))
+    end
+end
+
+-- Parse Zigbee Receive Packet (0x90)
+local function parse_rx_packet(tvb, tree)
+    tree:add(proto.fields["0x90.src_addr64"], tvb:range(0, 8))
+    tree:add(proto.fields["0x90.src_addr16"], tvb:range(8, 2))
+    tree:add(proto.fields["0x90.rx_options"], tvb:range(10, 1))
+    if tvb:len() > 11 then
+        tree:add(proto.fields["0x90.rf_data"], tvb:range(11, tvb:len() - 11))
+    end
+end
+
+
 local function read_raw_pdu(buffer, tvb, tree)
     -- Determine how long the complete PDU ought to be. If we don't have enough
     -- data, return nil so this is marked as an incomplete fragment.
@@ -81,11 +120,19 @@ local function read_raw_pdu(buffer, tvb, tree)
         tvb = buffer:tvb("XBee API Frame (reasm)")
     end
 
-    tree:add(proto.fields.cmdid, tvb:range(3, 1))
-    tree:add(proto.fields.data, tvb:range(4, data_len - 1))
+    local cmdid = tvb:range(3, 1):uint()
+    local cmdname = command_names[cmdid]
 
-    info = command_names[tvb:range(3, 1):uint()]
-    return total_len, info
+    tree:add(proto.fields.cmdid, tvb:range(3, 1))
+    local subtree = tree:add(cmdname)
+
+    if cmdid == 0x10 then
+        parse_tx_request(tvb:range(4, data_len), subtree)
+    elseif cmdid == 0x90 then
+        parse_rx_packet(tvb:range(4, data_len), subtree)
+    end
+
+    return total_len, cmdname or "Unknown Command"
 end
 
 
@@ -235,6 +282,7 @@ function proto.dissector(tvb, pinfo, tree)
 
     -- Set the Info column to the comma-delimited list of info strings.
     pinfo.cols.info = table.concat(infos, ", ")
+    pinfo.cols.protocol = proto.description
 
     -- If there is any left over data, we will save the unconsumed fragment in
     -- the fragments table.
