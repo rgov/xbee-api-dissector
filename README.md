@@ -1,6 +1,6 @@
 # XBee API Dissector for Wireshark
 
-This repository contains a *very basic* Wireshark dissector for Xbee API communication between a host device and an XBee Zigbee RF Modules.
+This repository contains a *very basic* Wireshark dissector for Xbee API communication between a host device and an XBee Zigbee RF Module.
 
 The dissector is partially generated from [the specification](https://www.digi.com/resources/documentation/DigiDocs/90002002/Default.htm#Containers/cont_xbee_pro_zigbee_api_operation.htm).
 
