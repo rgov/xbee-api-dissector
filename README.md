@@ -1,17 +1,11 @@
 # XBee API Dissector for Wireshark
 
-This repository contains two scripts:
+This repository contains a *very basic* Wireshark dissector for Xbee API communication between a host device and an XBee Zigbee RF Modules.
 
-1. A basic Wireshark dissector for Xbee API frames generated from the [specification](https://www.digi.com/resources/documentation/DigiDocs/90002002/Default.htm#Containers/cont_xbee_pro_zigbee_api_operation.htm).
+The dissector is partially generated from [the specification](https://www.digi.com/resources/documentation/DigiDocs/90002002/Default.htm#Containers/cont_xbee_pro_zigbee_api_operation.htm).
 
-    Only Zigbee Transmit Request and Zigbee Receive Packet frames are dissected.
+Only Zigbee Transmit Request and Zigbee Receive Packet frames are dissected.
 
-    The dissector recognizes escaped frames and should dissect them correctly. However, fragmented frames are not currently reassembled.
+To capture serial traffic, refer to the [rgov/serial2pcap](https://github.com/rgov/serial2pcap) repository.
 
-    Copy the `xbee.lua` script into the Wireshark plugins directory. The location of the plugins directory can be found by opening Wireshark and navigating to About Wireshark → Folders. Load the plugin using Analyze → Reload Lua Plugins.
-
-2. A Python script for generating a PCAP file from a capture of [Serial Port Monitor](https://www.serial-port-monitor.org/) by Electonic Team, Inc.
-
-    The script cannot understand the proprietary .spm file format, so the user must export the capture to a CSV file by right clicking and selecting Export to...
-
-    The conversion process synthesizes UDP packets for each serial read and write operation. The host takes the IP address 1.0.0.0.
+To install the dissector, copy the `xbee.lua` script into the Wireshark plugins directory. The location of the plugins directory can be found by opening Wireshark and navigating to About Wireshark → Folders. Load the plugin using Analyze → Reload Lua Plugins.

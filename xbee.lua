@@ -1,272 +1,260 @@
--- XBee API Protocol dissector for Wireshark
-local xbee_proto       = Proto("xbee", "XBee API Protocol")
+local proto         = Proto("xbee", "XBee API")
+proto.fields.data   = ProtoField.bytes("xbee.data", "Command Data")
 
--- Main header fields
-local f_start          = ProtoField.uint8("xbee.start", "Start Delimiter", base.HEX)
-local f_length         = ProtoField.uint16("xbee.length", "Length", base.DEC)
-local f_escaped        = ProtoField.bool("xbee.escaped", "Escaped", 8, nil, 0xFF)
-local f_frame_data     = ProtoField.bytes("xbee.data", "Frame Data")
-local f_checksum       = ProtoField.uint8("xbee.checksum", "Checksum", base.HEX)
-local f_valid_checksum = ProtoField.bool("xbee.checksum_valid", "Checksum Valid", 8, nil, 0xFF)
-local f_cmdid          = ProtoField.uint8("xbee.cmdid", "API Identifier", base.HEX)
-local f_raw_data       = ProtoField.bytes("xbee.raw", "Raw Frame Data")
-
--- Fields for Transmit Request (0x10)
-local f_tx_frameid     = ProtoField.uint8("xbee.10.frameid", "Frame ID", base.HEX)
-local f_tx_dest64      = ProtoField.uint64("xbee.10.dest64", "64-bit Destination", base.HEX)
-local f_tx_dest16      = ProtoField.uint16("xbee.10.dest16", "16-bit Destination", base.HEX)
-local f_tx_radius      = ProtoField.uint8("xbee.10.radius", "Broadcast Radius", base.DEC)
-local f_tx_options     = ProtoField.uint8("xbee.10.options", "Transmit Options", base.HEX)
-local f_tx_data        = ProtoField.bytes("xbee.10.data", "RF Data")
-
--- Fields for Explicit Addressing Command Request (0x11)
-local f_ex_frameid     = ProtoField.uint8("xbee.11.frameid", "Frame ID", base.HEX)
-local f_ex_dest64      = ProtoField.uint64("xbee.11.dest64", "64-bit Destination", base.HEX)
-local f_ex_dest16      = ProtoField.uint16("xbee.11.dest16", "16-bit Destination", base.HEX)
-local f_ex_src_ep      = ProtoField.uint8("xbee.11.src_ep", "Source Endpoint", base.HEX)
-local f_ex_dest_ep     = ProtoField.uint8("xbee.11.dest_ep", "Destination Endpoint", base.HEX)
-local f_ex_cluster     = ProtoField.uint16("xbee.11.cluster", "Cluster ID", base.HEX)
-local f_ex_profile     = ProtoField.uint16("xbee.11.profile", "Profile ID", base.HEX)
-local f_ex_radius      = ProtoField.uint8("xbee.11.radius", "Broadcast Radius", base.DEC)
-local f_ex_options     = ProtoField.uint8("xbee.11.options", "Transmit Options", base.HEX)
-local f_ex_data        = ProtoField.bytes("xbee.11.data", "Command Data")
-
--- Fields for Zigbee Receive Packet (0x90)
-local f_rx_source64    = ProtoField.uint64("xbee.90.src64", "64-bit Source", base.HEX)
-local f_rx_source16    = ProtoField.uint16("xbee.90.src16", "16-bit Source", base.HEX)
-local f_rx_options     = ProtoField.uint8("xbee.90.options", "Receive Options", base.HEX)
-local f_rx_data        = ProtoField.bytes("xbee.90.data", "RF Data")
-
--- Fields for Explicit Receive Indicator (0x91)
-local f_er_src64       = ProtoField.uint64("xbee.91.src64", "64-bit Source", base.HEX)
-local f_er_src16       = ProtoField.uint16("xbee.91.src16", "16-bit Source", base.HEX)
-local f_er_src_ep      = ProtoField.uint8("xbee.91.src_ep", "Source Endpoint", base.HEX)
-local f_er_dest_ep     = ProtoField.uint8("xbee.91.dest_ep", "Destination Endpoint", base.HEX)
-local f_er_cluster     = ProtoField.uint16("xbee.91.cluster", "Cluster ID", base.HEX)
-local f_er_profile     = ProtoField.uint16("xbee.91.profile", "Profile ID", base.HEX)
-local f_er_options     = ProtoField.uint8("xbee.91.options", "Receive Options", base.HEX)
-local f_er_data        = ProtoField.bytes("xbee.91.data", "RF Data")
-
-xbee_proto.fields      = {
-    f_start, f_length, f_escaped, f_frame_data, f_checksum, f_valid_checksum, f_cmdid, f_raw_data,
-    f_tx_frameid, f_tx_dest64, f_tx_dest16, f_tx_radius, f_tx_options, f_tx_data,
-    f_ex_frameid, f_ex_dest64, f_ex_dest16, f_ex_src_ep, f_ex_dest_ep, f_ex_cluster, f_ex_profile, f_ex_radius,
-    f_ex_options, f_ex_data,
-    f_rx_source64, f_rx_source16, f_rx_options, f_rx_data,
-    f_er_src64, f_er_src_ep, f_er_src16, f_er_dest_ep, f_er_cluster, f_er_profile, f_er_options, f_er_data
+local command_names = {
+    [0x08] = "AT Command",
+    [0x09] = "AT Command - Queue Parameter Value",
+    [0x10] = "Zigbee Transmit Request",
+    [0x11] = "Explicit Addressing Command Request",
+    [0x17] = "Remote Command Request",
+    [0x21] = "Create Source Route",
+    [0x88] = "AT Command Response",
+    [0x8A] = "Modem Status",
+    [0x8B] = "Zigbee Transmit Status",
+    [0x90] = "Zigbee Receive Packet",
+    [0x91] = "Explicit Receive Indicator",
+    [0x92] = "Zigbee I/O Data Sample Rx Indicator",
+    [0x94] = "XBee Sensor Read Indicator",
+    [0x95] = "Node Identification Indicator",
+    [0x97] = "Remote Command Response",
+    [0x98] = "Extended Modem Status",
+    [0xA0] = "Over-the-Air Firmware Update Status",
+    [0xA1] = "Route Record Indicator",
+    [0xA3] = "Many-to-One Route Request Indicator"
 }
+proto.fields.cmdid  = ProtoField.uint8("xbee.cmdid", "Command ID", base.HEX, command_names)
 
--- Unescape function:
--- Processes a TVB range containing escaped bytes. An escape is signaled by 0x7D; the following byte
--- is XOR'd with 0x20. Returns a new ByteArray with the unescaped data.
-local function unescape_tvb(tvb_range)
-    local ba = ByteArray.new()
-    local len = tvb_range:len()
+
+-- In the AP=2 mode, the wire format includes escape characters. This function
+-- unescapes a ByteArray and returns a new one.
+local function unescape(buf)
+    local out = ByteArray.new()
+    out:set_size(buf:len())
+
     local i = 0
-    while i < len do
-        local byte = tvb_range:range(i, 1):uint()
-        if byte == 0x7D then
-            if i + 1 < len then
-                local next_byte = tvb_range:range(i + 1, 1):uint()
-                ba:append_uint8(bit32.bxor(next_byte, 0x20))
-                i = i + 2
-            else
-                ba:append_uint8(byte)
-                i = i + 1
-            end
+    local j = 0
+    while i < buf:len() do
+        local b = buf:uint(i, 1)
+        if b == 0x7D then
+            if i + 1 >= buf:len() then return nil end -- out of bounds
+            out:set_index(j, bit.bxor(buf:uint(i + 1, 1), 0x20))
+            i = i + 2
         else
-            ba:append_uint8(byte)
+            out:set_index(j, b)
             i = i + 1
         end
+        j = j + 1
     end
-    return ba
+
+    out:set_size(j)
+    return out
 end
 
--- Parse Transmit Request (0x10)
-local function parse_tx_request(frame_data, tree)
-    local st = tree:add(xbee_proto, frame_data, "Zigbee Transmit Request (0x10)")
-    if frame_data:len() < 14 then
-        st:add_expert_info(PI_MALFORMED, PI_ERROR, "Frame too short for 0x10")
-        return
+-- Validate the checksum of a ByteArray. Also returns false if the length
+-- exceeds the buffer size.
+local function validate_checksum(buf)
+    if buf:len() < 4 then return false end
+    local data_len = buf:uint(1, 2)
+    if buf:len() < (1 + 2 + data_len + 1) then return false end
+    local sum = 0
+    for i = 3, 2 + data_len do
+        sum = (sum + buf:uint(i, 1)) % 256
     end
-    local ofs = 0
-    st:add(f_cmdid, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_tx_frameid, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_tx_dest64, frame_data:range(ofs, 8))
-    ofs = ofs + 8
-    st:add(f_tx_dest16, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_tx_radius, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_tx_options, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    if ofs < frame_data:len() then
-        st:add(f_tx_data, frame_data:range(ofs, frame_data:len() - ofs))
-    end
+    return ((0xFF - sum) % 256) == buf:uint(3 + data_len, 1)
 end
 
--- Parse Explicit Addressing Command Request (0x11)
-local function parse_explicit_addressing(frame_data, tree)
-    local st = tree:add(xbee_proto, frame_data, "Explicit Addressing Command Request (0x11)")
-    if frame_data:len() < 20 then
-        st:add_expert_info(PI_MALFORMED, PI_ERROR, "Frame too short for 0x11")
-        return
+
+local function read_raw_pdu(buffer, tvb, tree)
+    -- Determine how long the complete PDU ought to be. If we don't have enough
+    -- data, return nil so this is marked as an incomplete fragment.
+    if buffer:len() < 4 then return nil end
+    local data_len = buffer:uint(1, 2)
+    local total_len = 1 + 2 + data_len + 1
+    if buffer:len() < total_len then
+        return nil
     end
-    local ofs = 0
-    st:add(f_cmdid, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_ex_frameid, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_ex_dest64, frame_data:range(ofs, 8))
-    ofs = ofs + 8
-    st:add(f_ex_dest16, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_ex_src_ep, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_ex_dest_ep, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_ex_cluster, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_ex_profile, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_ex_radius, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_ex_options, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    if ofs < frame_data:len() then
-        st:add(f_ex_data, frame_data:range(ofs, frame_data:len() - ofs))
+
+    -- Our Tvb might be nil if we are parsing a reassembled buffer, or non-nil
+    -- if we are parsing a PDU from within the current packet or an unescaped
+    -- buffer created by read_escaped_pdu().
+    if not tvb then
+        tvb = buffer:tvb("XBee API Frame (reasm)")
     end
+
+    tree:add(proto.fields.cmdid, tvb:range(3, 1))
+    tree:add(proto.fields.data, tvb:range(4, data_len - 1))
+
+    info = command_names[tvb:range(3, 1):uint()]
+    return total_len, info
 end
 
--- Parse Zigbee Receive Packet (0x90)
-local function parse_rx_packet(frame_data, tree)
-    local st = tree:add(xbee_proto, frame_data, "Zigbee Receive Packet (0x90)")
-    if frame_data:len() < 12 then
-        st:add_expert_info(PI_MALFORMED, PI_ERROR, "Frame too short for 0x90")
-        return
+
+-- Unescapes the given buffer, which is assumed to be in escaped format.
+local function read_escaped_pdu(buffer, tvb, tree)
+    local unesc = unescape(buffer)
+    if not unesc or unesc:len() == buffer:len() or not validate_checksum(unesc)
+    then
+        return nil
     end
-    local ofs = 0
-    st:add(f_cmdid, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_rx_source64, frame_data:range(ofs, 8))
-    ofs = ofs + 8
-    st:add(f_rx_source16, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_rx_options, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    if ofs < frame_data:len() then
-        st:add(f_rx_data, frame_data:range(ofs, frame_data:len() - ofs))
-    end
+
+    -- At this point we have a valid, unescaped PDU, so it's OK to make a new
+    -- Tvb that will pop up in the UI.
+    local newtvb = unesc:tvb("XBee API Frame (" ..
+        ((not tvb) and "reasm, " or "") .. "unesc)")
+    return read_raw_pdu(unesc, newtvb, tree)
 end
 
--- Parse Explicit Receive Indicator (0x91)
-local function parse_explicit_receive(frame_data, tree)
-    local st = tree:add(xbee_proto, frame_data, "Explicit Receive Indicator (0x91)")
-    if frame_data:len() < 18 then
-        st:add_expert_info(PI_MALFORMED, PI_ERROR, "Frame too short for 0x91")
-        return
+
+-- Reads a complete PDU. Since we don't know whether the PDU is in the escaped
+-- (AP=2) format or not, we first try to unescape it, and if the checksum isn't
+-- valid, we try to read it as a raw PDU.
+--
+-- buffer is the ByteArray containing the data to parse.
+--
+-- tvb is either a Tvb for the current packet, or nil if the PDU begain in an
+-- earlier packet. In this case, create a new Tvb from the buffer *after* we
+-- have validated that we have a complete PDU.
+--
+-- Returns the number of bytes consumed, or nil if there is not a complete PDU
+-- in the buffer. Optionally, also return  a string to be appended to the
+-- packet's Info column.
+local function read_complete_pdu(buffer, tvb, tree)
+    local consumed, info = read_escaped_pdu(buffer, tvb, tree)
+    if consumed then
+        return consumed, info
     end
-    local ofs = 0
-    st:add(f_cmdid, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_er_src64, frame_data:range(ofs, 8))
-    ofs = ofs + 8
-    st:add(f_er_src16, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_er_src_ep, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_er_dest_ep, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    st:add(f_er_cluster, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_er_profile, frame_data:range(ofs, 2))
-    ofs = ofs + 2
-    st:add(f_er_options, frame_data:range(ofs, 1))
-    ofs = ofs + 1
-    if ofs < frame_data:len() then
-        st:add(f_er_data, frame_data:range(ofs, frame_data:len() - ofs))
-    end
+    return read_raw_pdu(buffer, tvb, tree)
 end
 
-function xbee_proto.dissector(tvb, pinfo, tree)
-    if tvb:len() < 4 then return end
-    if tvb(0, 1):uint() ~= 0x7E then return end
 
-    pinfo.cols.protocol = "XBee"
-    local offset = 0
+--------------------------------------------------------------------------------
+--  REASSEMBLY  --  based on https://github.com/rgov/wireshark-udp-reassembly
+--------------------------------------------------------------------------------
 
-    local start_delim = tvb(offset, 1)
-    offset = offset + 1
-    local len_field = tvb(offset, 2)
-    local frame_length = len_field:uint()
-    offset = offset + 2
-    local total_len = frame_length + 1
-    if tvb:len() < 3 + total_len then return end
+-- The reassembly table is a table of tables,
+--
+--   fragments_by_stream[stream_key][packet_number] = {
+--     buffer = <string or nil>,
+--     prev = <number or nil>
+--   }
+--
+-- stream_key is a unique identifier for each unidirectional stream, generated
+-- by get_stream_key().
+--
+-- buffer is the unprocessed fragment within the given packet. If there were no
+-- incomplete PDUs, then buffer is nil. Note this is distinct from an empty
+-- buffer, which means that there was an incomplete PDU, but the packet did not
+-- contribute any data.
+--
+-- prev is the packet number of the previous packet that contains a fragment of
+-- the same PDU. This will be nil if this is the first fragment of a PDU.
+local fragments_by_stream = {}
 
-    local tree_root = tree:add(xbee_proto, tvb(), "XBee API Protocol")
-    tree_root:add(f_start, start_delim)
-    tree_root:add(f_length, len_field)
 
-    -- Retrieve the raw frame bytes (may include escape sequences)
-    local raw_frame = tvb:range(offset, total_len)
+-- Returns a unique identifier for the stream that the packet belongs to.
+local function get_stream_key(pinfo)
+    return tostring(pinfo.src) .. ":" .. tostring(pinfo.src_port) ..
+        "->" .. tostring(pinfo.dst) .. ":" .. tostring(pinfo.dst_port)
+end
 
-    -- Efficiently check for the escape character (0x7D) using string.find.
-    local raw_str = raw_frame:bytes():raw()
-    local has_escape = string.find(raw_str, "\x7D", 1, true) ~= nil
 
-    -- If escape characters are detected, attempt to unescape the frame.
-    -- Verify the checksum on the unescaped frame; if valid, use the unescaped data.
-    local used_escape = false
-    local data_tvb = raw_frame
-    if has_escape then
-        local unesc_ba = unescape_tvb(raw_frame)
-        local unesc_tvb = unesc_ba:tvb("Unescaped XBee Frame")
-        if unesc_tvb:len() >= 1 then
-            local unesc_chk = unesc_tvb:range(unesc_tvb:len() - 1, 1):uint()
-            local sum = 0
-            for j = 0, unesc_tvb:len() - 2 do
-                sum = (sum + unesc_tvb:range(j, 1):uint()) % 256
-            end
-            if (0xFF - sum) % 256 == unesc_chk then
-                data_tvb = unesc_tvb
-                used_escape = true
+function proto.dissector(tvb, pinfo, tree)
+    -- Look up the reassembly state for this stream
+    local key = get_stream_key(pinfo)
+    if not fragments_by_stream[key] then
+        fragments_by_stream[key] = {}
+    end
+    local fragments = fragments_by_stream[key]
+
+    -- Find the previous packet in this stream, i.e., the one with the greatest
+    -- packet number less than the current packet number.
+    local prev_pkt_num = nil
+    for pkt_num, state in pairs(fragments) do
+        if pkt_num < pinfo.number then
+            if (not prev_pkt_num) or (pkt_num > prev_pkt_num) then
+                prev_pkt_num = pkt_num
             end
         end
     end
-    tree_root:add(f_escaped, used_escape)
 
-    local frame_data_len = data_tvb:len() - 1
-    local frame_data = data_tvb:range(0, frame_data_len)
-    local recv_checksum = data_tvb:range(frame_data_len, 1):uint()
-    tree_root:add(f_frame_data, raw_frame)
-    tree_root:add(f_checksum, data_tvb:range(frame_data_len, 1))
-
-    local sum = 0
-    for i = 0, frame_data:len() - 1 do
-        sum = (sum + frame_data:range(i, 1):uint()) % 256
+    -- If the previous packet has a nil buffer, then it was not part of an
+    -- incomplete PDU (distinct from an empty buffer).
+    if prev_pkt_num and not fragments[prev_pkt_num].buffer then
+        prev_pkt_num = nil
     end
-    local calc_checksum = (0xFF - sum) % 256
-    tree_root:add(f_valid_checksum, calc_checksum == recv_checksum)
 
-    if frame_data:len() < 1 then return end
-    local api_id = frame_data:range(0, 1):uint()
-    tree_root:add(f_cmdid, frame_data:range(0, 1))
+    -- Otherwise, follow the linked list backwards to assemble all the fragments
+    -- of the incomplete PDU.
+    local whole_buffer = ByteArray.new()
+    local i = prev_pkt_num
+    while i do
+        local prev_state = fragments[i]
+        if prev_state.buffer then
+            whole_buffer:prepend(ByteArray.new(prev_state.buffer, true))
+        end
+        i = prev_state.prev
+    end
 
-    if api_id == 0x10 then
-        parse_tx_request(frame_data, tree_root)
-    elseif api_id == 0x11 then
-        parse_explicit_addressing(frame_data, tree_root)
-    elseif api_id == 0x90 then
-        parse_rx_packet(frame_data, tree_root)
-    elseif api_id == 0x91 then
-        parse_explicit_receive(frame_data, tree_root)
+    local earlier_fragment_len = whole_buffer:len()
+    local was_reassembled = earlier_fragment_len > 0
+
+    -- Add the current packet data, too.
+    whole_buffer:append(tvb:bytes())
+
+    -- Loop to extract one or more complete PDUs.
+    local offset = 0
+    local pdu_count = 0
+    local infos = {}
+    while offset < whole_buffer:len() do
+        -- If we are parsing from within the current packet, then we will pass
+        -- read_complete_pdu() a TvbRange within the current packet. Otherwise,
+        -- we pass nil, indicating that we are parsing from a reassembled
+        -- buffer, and a new Tvb should be created if a complete PDU is found.
+        local tvb2 = nil
+        if offset >= earlier_fragment_len then
+            tvb2 = tvb:range(offset - earlier_fragment_len)
+        end
+
+        -- Try to consume a complete PDU from the buffer at offset. If this
+        -- returns nil, then it is an incomplete PDU.
+        local consumed, info = read_complete_pdu(
+            whole_buffer:subset(offset, whole_buffer:len() - offset),
+            tvb2,
+            tree
+        )
+
+        if not consumed then
+            table.insert(infos, "fragment")
+            break
+        end
+
+        table.insert(infos, info)
+        offset = offset + consumed
+        pdu_count = pdu_count + 1
+    end
+
+    -- Set the Info column to the comma-delimited list of info strings.
+    pinfo.cols.info = table.concat(infos, ", ")
+
+    -- If there is any left over data, we will save the unconsumed fragment in
+    -- the fragments table.
+    local leftover = nil
+    if offset < whole_buffer:len() then
+        local consumed_from_current = math.max(0, offset - earlier_fragment_len)
+        leftover = tvb:range(consumed_from_current):bytes():raw()
+    end
+
+    -- If we failed to extract a full PDU, then use the linked list to connect
+    -- our incomplete buffer with the previous packet.
+    if pdu_count == 0 then
+        fragments[pinfo.number] = { buffer = leftover, prev = prev_pkt_num }
     else
-        tree_root:add(f_raw_data, frame_data)
+        fragments[pinfo.number] = { buffer = leftover, prev = nil }
     end
 end
 
--- Hack: Register the dissector for Ethernet packets with EtherType 0x4141
-local ethertype_table = DissectorTable.get("ethertype")
-ethertype_table:add(0x4141, xbee_proto)
+--------------------------------------------------------------------------------
+
+-- Register the dissector for a given UDP port
+local udp_port = DissectorTable.get("udp.port")
+udp_port:add(11243, proto.dissector)
