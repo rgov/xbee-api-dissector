@@ -41,6 +41,14 @@ proto.fields["0x90.rx_options"]       = ProtoField.uint8("xbee.0x90.rx_options",
 proto.fields["0x90.rf_data"]          = ProtoField.bytes("xbee.0x90.rf_data", "RF Data")
 
 
+-- Add a dissector table so that other dissectors can register for the RF Data.
+local rf_dissector_table = DissectorTable.new(
+    "xbee.rf_data",
+    "Zigbee transmission dissector",
+    ftypes.NONE
+)
+
+
 -- In the AP=2 mode, the wire format includes escape characters. This function
 -- unescapes a ByteArray and returns a new one.
 local function unescape(buf)
@@ -81,7 +89,7 @@ end
 
 
 -- Parse Zigbee Transmit Request (0x10)
-local function parse_tx_request(tvb, tree)
+local function parse_tx_request(pinfo, tvb, tree)
     tree:add(proto.fields["0x10.frame_id"], tvb:range(0, 1))
     tree:add(proto.fields["0x10.dest_addr64"], tvb:range(1, 8))
     tree:add(proto.fields["0x10.dest_addr16"], tvb:range(9, 2))
@@ -89,21 +97,33 @@ local function parse_tx_request(tvb, tree)
     tree:add(proto.fields["0x10.tx_options"], tvb:range(12, 1))
     if tvb:len() > 13 then
         tree:add(proto.fields["0x10.rf_data"], tvb:range(13, tvb:len() - 13))
+
+        -- Dispatch RF data to subdissector
+        local dissector = rf_dissector_table:get_dissector()
+        if dissector then
+            dissector:call(tvb:range(13, tvb:len() - 13):tvb(), pinfo, tree)
+        end
     end
 end
 
 -- Parse Zigbee Receive Packet (0x90)
-local function parse_rx_packet(tvb, tree)
+local function parse_rx_packet(pinfo, tvb, tree)
     tree:add(proto.fields["0x90.src_addr64"], tvb:range(0, 8))
     tree:add(proto.fields["0x90.src_addr16"], tvb:range(8, 2))
     tree:add(proto.fields["0x90.rx_options"], tvb:range(10, 1))
     if tvb:len() > 11 then
         tree:add(proto.fields["0x90.rf_data"], tvb:range(11, tvb:len() - 11))
+
+        -- Dispatch RF data to subdissector
+        local dissector = rf_dissector_table:get_dissector()
+        if dissector then
+            dissector:call(tvb:range(11, tvb:len() - 11):tvb(), pinfo, tree)
+        end
     end
 end
 
 
-local function read_raw_pdu(buffer, tvb, tree)
+local function read_raw_pdu(pinfo, buffer, tvb, tree)
     -- Determine how long the complete PDU ought to be. If we don't have enough
     -- data, return nil so this is marked as an incomplete fragment.
     if buffer:len() < 4 then return nil end
@@ -126,18 +146,29 @@ local function read_raw_pdu(buffer, tvb, tree)
     tree:add(proto.fields.cmdid, tvb:range(3, 1))
     local subtree = tree:add(cmdname)
 
+    -- Before we call out to a subdissector, save the current Info column. If
+    -- we notice that it changed, keep the new value.
+    local info_before = tostring(pinfo.cols.info)
+
     if cmdid == 0x10 then
-        parse_tx_request(tvb:range(4, data_len), subtree)
+        parse_tx_request(pinfo, tvb:range(4, data_len), subtree)
     elseif cmdid == 0x90 then
-        parse_rx_packet(tvb:range(4, data_len), subtree)
+        parse_rx_packet(pinfo, tvb:range(4, data_len), subtree)
     end
 
-    return total_len, cmdname or "Unknown Command"
+    local info
+    if tostring(pinfo.cols.info) == info_before then
+        info = cmdname or "Unknown Command"
+    else
+        info = tostring(pinfo.cols.info)
+    end
+
+    return total_len, info
 end
 
 
 -- Unescapes the given buffer, which is assumed to be in escaped format.
-local function read_escaped_pdu(buffer, tvb, tree)
+local function read_escaped_pdu(pinfo, buffer, tvb, tree)
     local unesc = unescape(buffer)
     if not unesc or unesc:len() == buffer:len() or not validate_checksum(unesc)
     then
@@ -148,7 +179,7 @@ local function read_escaped_pdu(buffer, tvb, tree)
     -- Tvb that will pop up in the UI.
     local newtvb = unesc:tvb("XBee API Frame (" ..
         ((not tvb) and "reasm, " or "") .. "unesc)")
-    return read_raw_pdu(unesc, newtvb, tree)
+    return read_raw_pdu(pinfo, unesc, newtvb, tree)
 end
 
 
@@ -165,12 +196,12 @@ end
 -- Returns the number of bytes consumed, or nil if there is not a complete PDU
 -- in the buffer. Optionally, also return  a string to be appended to the
 -- packet's Info column.
-local function read_complete_pdu(buffer, tvb, tree)
-    local consumed, info = read_escaped_pdu(buffer, tvb, tree)
+local function read_complete_pdu(pinfo, buffer, tvb, tree)
+    local consumed, info = read_escaped_pdu(pinfo, buffer, tvb, tree)
     if consumed then
         return consumed, info
     end
-    return read_raw_pdu(buffer, tvb, tree)
+    return read_raw_pdu(pinfo, buffer, tvb, tree)
 end
 
 
@@ -265,6 +296,7 @@ function proto.dissector(tvb, pinfo, tree)
         -- Try to consume a complete PDU from the buffer at offset. If this
         -- returns nil, then it is an incomplete PDU.
         local consumed, info = read_complete_pdu(
+            pinfo,
             whole_buffer:subset(offset, whole_buffer:len() - offset),
             tvb2,
             tree
